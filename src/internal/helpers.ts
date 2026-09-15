@@ -242,14 +242,22 @@ function boundedClone(value: unknown, budget: { remaining: number }, depth: numb
  *
  * Bounded: the value is pruned to roughly `limit` characters BEFORE
  * serialization, so the cost is proportional to the cap, not the payload.
- * The default matches MAX_ATTR_LENGTH since every stringified payload feeds
- * a span attribute that `truncate()` caps at that size anyway.
+ * Shrink the content budget until JSON syntax and escaping fit too, so the
+ * shipper does not truncate the serialized document into invalid JSON.
  */
 export function safeStringify(value: unknown, limit: number = MAX_ATTR_LENGTH): string | undefined {
   if (value === undefined || value === null) return undefined;
   try {
-    const pruned = boundedClone(value, { remaining: limit + TRUNCATION_MARKER.length + 256 }, 0);
-    return JSON.stringify(pruned);
+    const source = boundedClone(value, { remaining: limit }, 0);
+    for (let contentLimit = limit; contentLimit > 0; contentLimit = Math.floor(contentLimit / 2)) {
+      const pruned = contentLimit === limit
+        ? source
+        : boundedClone(source, { remaining: contentLimit }, 0);
+      const serialized = JSON.stringify(pruned);
+      if (serialized === undefined || serialized.length <= limit) return serialized;
+    }
+    const empty = JSON.stringify({ truncated: true });
+    return empty.length <= limit ? empty : limit >= 2 ? "{}" : "0";
   } catch {
     try {
       return capText(String(value), limit);
@@ -354,11 +362,4 @@ function modelMessage(message: Message, budget: { remaining: number }) {
     return { role: "tool", toolCallId, toolName, isError: message.isError, content };
   }
   return { role: message.role, content };
-}
-
-/** Pi tool events contain a result envelope; errors carry their message in content. */
-export function toolResultValue(result: unknown, isError: boolean): unknown {
-  if (result === null || typeof result !== "object" || !("content" in result)) return result;
-  if (!isError && "details" in result && result.details !== undefined) return result.details;
-  return result.content;
 }

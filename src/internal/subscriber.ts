@@ -12,7 +12,6 @@ import {
   safeStringify,
   formatToolSpanName,
   serializeModelContext,
-  toolResultValue,
   getUsername,
   getHostname,
   modelSpendSpanAttributes,
@@ -454,8 +453,7 @@ export function createSubscriber(
       const argsStr = safeStringify(args, textLimit);
       if (argsStr) pushAttr(endAttrs, attrString("ai.toolCall.args", argsStr));
 
-      const output = toolResultValue(result, isError);
-      const resultStr = output === null ? "null" : safeStringify(output, textLimit);
+      const resultStr = result === null ? "null" : safeStringify(result, textLimit);
       if (resultStr) pushAttr(endAttrs, attrString("ai.toolCall.result", resultStr));
 
       traceShipper.endSpan(toolSpan, {

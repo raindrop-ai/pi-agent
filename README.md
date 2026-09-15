@@ -75,8 +75,8 @@ For the CLI extension, set the slug via the `RAINDROP_PROJECT_ID` env var (or th
 
 Programmatic subscriptions capture the system prompt, messages, and tools after
 Pi applies `transformContext`. Model spans start before the provider call and
-include reasoning and tool calls. Tool spans contain the result's `details` when
-provided, or its `content`; failed tools retain their error content.
+include reasoning and tool calls. Tool spans preserve the full result envelope,
+including model-visible `content` and any `details`, for both successful and failed tools.
 
 For agents that finish by committing a result through a tool, provide an output
 reader. It runs at completion and cannot interrupt the agent if it throws:
@@ -95,6 +95,10 @@ Set `maxTextFieldChars` on `createRaindropPiAgent` to use a different positive
 limit across the subscriber and both shippers. For full capture of large replay
 payloads, use `Number.MAX_SAFE_INTEGER`; transport and ingest limits still apply.
 The CLI extension retains its existing event and span limits.
+
+Oversized JSON tool payloads are pruned to fit the configured limit while staying
+valid JSON. A stricter `OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT` can still truncate
+serialized JSON afterward in the shared trace shipper.
 
 ## Documentation
 
