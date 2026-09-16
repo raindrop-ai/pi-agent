@@ -161,6 +161,7 @@ export function registerTracing(
   config: RaindropExtensionConfig,
   eventShipper: EventShipper,
   traceShipper: TraceShipper,
+  onShutdown?: () => void,
 ): void {
   const stateRef: { current?: SessionState } = {};
 
@@ -527,6 +528,12 @@ export function registerTracing(
       await Promise.all([eventShipper.shutdown(), traceShipper.shutdown()]);
     } catch (err) {
       logError("session_shutdown", err);
+    } finally {
+      try {
+        onShutdown?.();
+      } catch {
+        // Optional metadata cleanup must not affect the host lifecycle.
+      }
     }
   });
 }

@@ -1,5 +1,5 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
-import { resolveLocalDebuggerBaseUrl } from "@raindrop-ai/core";
+import { createAppGitContext, resolveLocalDebuggerBaseUrl } from "@raindrop-ai/core";
 import { EventShipper, TraceShipper } from "./internal/shipper";
 import { createSubscriber } from "./internal/subscriber";
 import type {
@@ -62,6 +62,11 @@ export function createRaindropPiAgent(
 
   const envDebug = envDebugEnabled();
   const debug = opts.events?.debug === true || opts.traces?.debug === true || envDebug;
+  const hasDestination = hasWriteKey || hasLocalDestination;
+  const appGitContext = createAppGitContext(
+    hasDestination && (eventsEnabled || tracesEnabled) ? opts.appGit : false,
+    { allowLocalGit: false },
+  );
 
   const eventShipper =
     eventsEnabled && (hasWriteKey || opts.endpoint || hasLocalDestination)
@@ -74,6 +79,7 @@ export function createRaindropPiAgent(
           projectId: opts.projectId,
           localDebuggerUrl: opts.localWorkshopUrl,
           maxTextFieldChars: opts.maxTextFieldChars,
+          appGitContext,
         })
       : null;
 
@@ -91,6 +97,7 @@ export function createRaindropPiAgent(
           projectId: opts.projectId,
           localDebuggerUrl: opts.localWorkshopUrl,
           maxTextFieldChars: opts.maxTextFieldChars,
+          appGitContext,
         })
       : null;
 
@@ -196,10 +203,14 @@ export function createRaindropPiAgent(
     },
 
     async shutdown() {
-      await Promise.all([
-        eventShipper?.shutdown() ?? Promise.resolve(),
-        traceShipper?.shutdown() ?? Promise.resolve(),
-      ]);
+      try {
+        await Promise.all([
+          eventShipper?.shutdown() ?? Promise.resolve(),
+          traceShipper?.shutdown() ?? Promise.resolve(),
+        ]);
+      } finally {
+        try { appGitContext.dispose(); } catch { /* optional metadata cleanup is best-effort */ }
+      }
     },
   };
 }

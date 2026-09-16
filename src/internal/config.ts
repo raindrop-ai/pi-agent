@@ -1,6 +1,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { AppGitOptions } from "@raindrop-ai/core";
+
+type AppGitFileOptions = {
+  commit_sha?: string | null;
+  commit_dirty?: boolean | null;
+  branch?: string | null;
+  detect_branch?: boolean;
+  source_directory?: string;
+  auto_detect?: boolean;
+};
 
 interface ConfigFile {
   write_key?: string;
@@ -10,6 +20,7 @@ interface ConfigFile {
   debug?: boolean;
   capture_system_prompt?: boolean;
   local_workshop_url?: string | null;
+  app_git?: AppGitFileOptions | false;
 }
 
 export interface EventMetadata {
@@ -39,6 +50,8 @@ export interface RaindropExtensionConfig {
    * the env / auto-detect resolution in `@raindrop-ai/core`.
    */
   localWorkshopUrl?: string | null;
+  /** Application Git identity override. false disables enrichment. */
+  appGit?: AppGitOptions | false;
 }
 
 function getPiAgentDirectory(): string {
@@ -87,6 +100,22 @@ export function loadConfig(projectDirectory: string): RaindropExtensionConfig {
         : (merged.capture_system_prompt ?? false),
     eventMetadata,
     localWorkshopUrl: resolveLocalWorkshopUrl(merged.local_workshop_url),
+    appGit: mapAppGit(merged.app_git),
+  };
+}
+
+function mapAppGit(
+  value: AppGitFileOptions | false | null | undefined,
+): AppGitOptions | false | undefined {
+  if (value === false || value === undefined) return value;
+  if (value === null) return undefined;
+  return {
+    commitSha: value.commit_sha,
+    commitDirty: value.commit_dirty,
+    branch: value.branch,
+    detectBranch: value.detect_branch,
+    sourceDirectory: value.source_directory,
+    autoDetect: value.auto_detect,
   };
 }
 

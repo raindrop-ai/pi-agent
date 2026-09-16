@@ -13,6 +13,8 @@
  *   RAINDROP_API_URL — custom endpoint (default: https://api.raindrop.ai/v1)
  *   RAINDROP_DEBUG — enable debug logging
  *   RAINDROP_CAPTURE_SYSTEM_PROMPT — capture system prompts in traces
+ *   RAINDROP_COMMIT_SHA / RAINDROP_COMMIT_DIRTY / RAINDROP_BRANCH — explicit
+ *     application identity (never inferred from the observer checkout)
  *   RAINDROP_LOCAL_WORKSHOP_URL — mirror to a local Raindrop Workshop daemon
  *     in addition to the cloud endpoint. Pass `null`, `""`, or `"false"` to
  *     opt out of all auto-detection.
@@ -20,9 +22,10 @@
  * Config file locations:
  *   ~/.pi/agent/raindrop.json (global)
  *   .pi/raindrop.json (project)
+ *   Use app_git with commit_sha, commit_dirty, branch, or false to opt out.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { resolveLocalDebuggerBaseUrl } from "@raindrop-ai/core";
+import { createAppGitContext, resolveLocalDebuggerBaseUrl } from "@raindrop-ai/core";
 
 import { loadConfig } from "./internal/config";
 import { libraryVersion } from "./version";
@@ -65,12 +68,17 @@ export default function extension(pi: ExtensionAPI): void {
     appLog("info", `Raindrop tracing enabled — destinations: ${destinations.join(", ")}`);
   }
 
+  // The Pi extension may observe a remote coding workspace. Share one context
+  // between both shippers and never infer identity from the observer checkout.
+  const appGitContext = createAppGitContext(config.appGit, { allowLocalGit: false });
+
   const eventShipper = new EventShipper({
     writeKey: config.writeKey,
     endpoint: config.endpoint,
     debug: config.debug,
     projectId: config.projectId,
     localDebuggerUrl: config.localWorkshopUrl,
+    appGitContext,
   });
 
   const traceShipper = new TraceShipper({
@@ -79,7 +87,8 @@ export default function extension(pi: ExtensionAPI): void {
     debug: config.debug,
     projectId: config.projectId,
     localDebuggerUrl: config.localWorkshopUrl,
+    appGitContext,
   });
 
-  registerTracing(pi, config, eventShipper, traceShipper);
+  registerTracing(pi, config, eventShipper, traceShipper, () => appGitContext.dispose());
 }

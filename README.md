@@ -107,3 +107,7 @@ See the full [Pi Agent docs](https://www.raindrop.ai/docs/integrations/pi-agent/
 ## License
 
 MIT
+
+## Application Git identity
+
+Set `appGit` on `createRaindropPiAgent` to override `commitSha`, `commitDirty`, and optional ordinary `branch`, or pass `false` to opt out. For the CLI extension, use `app_git` in `~/.pi/agent/raindrop.json` or `.pi/raindrop.json`, with `commit_sha`, `commit_dirty`, `branch`, `source_directory`, `detect_branch`, and `auto_detect`; `app_git: false` opts out. Pi may observe a coding workspace remotely, so the revision is unknown by default: ambient deploy/CI and observer working-directory metadata are ignored. Local Git discovery requires an explicit `sourceDirectory` / `source_directory` (or `RAINDROP_GIT_SOURCE_DIRECTORY`); explicit `RAINDROP_COMMIT_SHA` values are honored. Automatic branch discovery requires `detectBranch: true` / `detect_branch: true`.

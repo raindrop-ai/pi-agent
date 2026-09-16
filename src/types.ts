@@ -1,4 +1,5 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
+import type { AppGitOptions } from "@raindrop-ai/core";
 import type { Attachment } from "./internal/shipper";
 
 export type { Attachment };
@@ -7,6 +8,8 @@ export type { Attachment };
  * Options for the Raindrop Pi Agent client.
  */
 export interface RaindropPiAgentOptions {
+  /** Application Git identity. Local discovery requires an explicit sourceDirectory; false disables enrichment. */
+  appGit?: AppGitOptions | false;
   /**
    * Write key for direct authentication.
    * Optional — when omitted, telemetry shipping is disabled with a warning.

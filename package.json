@@ -1,6 +1,6 @@
 {
   "name": "@raindrop-ai/pi-agent",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Raindrop observability for Pi Agent — automatic tracing via subscriber or pi-coding-agent extension",
   "type": "module",
   "license": "MIT",
