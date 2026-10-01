@@ -18,7 +18,7 @@ import {
 } from "./helpers";
 import { libraryVersion } from "../version";
 import type { PiAgentSubscribeOptions } from "../types";
-import { resolveMaxTextFieldChars } from "@raindrop-ai/core";
+import { promptToolsAttribute, resolveMaxTextFieldChars, resolvePromptTools } from "@raindrop-ai/core";
 
 /** attr helpers return undefined for missing values; keep OtlpKeyValue[] pushes type-safe. */
 function pushAttr(attrs: OtlpKeyValue[], attr: OtlpKeyValue | undefined): void {
@@ -115,6 +115,7 @@ export function createSubscriber(
   const convoId = options.convoId ?? defaultOptions.convoId;
   const eventName = options.eventName ?? defaultOptions.eventName;
   const eventIdSource = options.eventId ?? defaultOptions.eventId;
+  const promptToolsOverride = options.tools ?? defaultOptions.tools;
   const properties = {
     ...(defaultOptions.properties ?? {}),
     ...(options.properties ?? {}),
@@ -134,6 +135,11 @@ export function createSubscriber(
             attrString("raindrop.span.kind", "llm_call"),
             attrString("ai.model.id", model.id),
             attrString("ai.prompt", serializeModelContext(context, textLimit)),
+            // `ai.prompt` bounded-clones the tools into the text budget; the
+            // catalog is recorded whole here (a schema cut mid-way is useless).
+            promptToolsAttribute(
+              resolvePromptTools({ override: promptToolsOverride, inferred: context.tools }),
+            ),
           ],
         });
       }

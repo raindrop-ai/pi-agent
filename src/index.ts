@@ -107,6 +107,7 @@ export function createRaindropPiAgent(
     eventName: opts.eventName,
     eventId: opts.eventId,
     properties: opts.properties,
+    tools: opts.tools,
   };
 
   return {

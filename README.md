@@ -78,6 +78,18 @@ Pi applies `transformContext`. Model spans start before the provider call and
 include reasoning and tool calls. Tool spans preserve the full result envelope,
 including model-visible `content` and any `details`, for both successful and failed tools.
 
+### Tool catalog capture
+
+Each model span also records the agent's `context.tools` as `ai.prompt.tools`: one
+JSON document per tool with `name`, `description` and the full TypeBox `parameters`
+schema as `inputSchema`. Unlike the tools preview inside `ai.prompt`, this list is not
+subject to the text budget, so schemas survive intact. Absent when the agent has no
+tool list; set `tools` to record a catalog explicitly.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `tools` | `ToolDeclaration[]` | - | Overrides the tool catalog recorded as `ai.prompt.tools` on every model span. Use when the integration cannot see the tools the model was given. Accepted on `createRaindropPiAgent` and per subscription via `subscribe(agent, { tools })`; the subscription value wins. `tools: []` records an empty catalog. |
+
 For agents that finish by committing a result through a tool, provide an output
 reader. It runs at completion and cannot interrupt the agent if it throws:
 

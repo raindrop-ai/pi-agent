@@ -1,5 +1,5 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
-import type { AppGitOptions } from "@raindrop-ai/core";
+import type { AppGitOptions, PromptToolsOverride } from "@raindrop-ai/core";
 import type { Attachment } from "./internal/shipper";
 
 export type { Attachment };
@@ -50,6 +50,13 @@ export interface RaindropPiAgentOptions {
   localWorkshopUrl?: string | null;
   /** Maximum characters per captured text field (default: 1,000,000). */
   maxTextFieldChars?: number;
+  /**
+   * Overrides the tool catalog recorded as `ai.prompt.tools` on every model
+   * span. Use when the integration cannot see the tools the model was given.
+   * Replaces the inferred `context.tools` list entirely; `[]` records an
+   * empty catalog. A `subscribe()`-level `tools` takes precedence.
+   */
+  tools?: PromptToolsOverride;
   /** Trace shipping configuration */
   traces?: {
     /** Enable trace shipping (default: true) */
@@ -94,6 +101,8 @@ export interface PiAgentSubscribeOptions {
   eventId?: () => string;
   /** Additional properties */
   properties?: Record<string, unknown>;
+  /** Tool catalog override for this subscription (see RaindropPiAgentOptions.tools) */
+  tools?: PromptToolsOverride;
 }
 
 /**
