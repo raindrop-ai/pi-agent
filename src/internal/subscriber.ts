@@ -18,7 +18,14 @@ import {
 } from "./helpers";
 import { libraryVersion } from "../version";
 import type { PiAgentSubscribeOptions } from "../types";
-import { promptToolsAttribute, resolveMaxTextFieldChars, resolvePromptTools } from "@raindrop-ai/core";
+import {
+  callContextEventId,
+  currentCallContext,
+  normalizeAttachments,
+  promptToolsAttribute,
+  resolveMaxTextFieldChars,
+  resolvePromptTools,
+} from "@raindrop-ai/core";
 
 /** attr helpers return undefined for missing values; keep OtlpKeyValue[] pushes type-safe. */
 function pushAttr(attrs: OtlpKeyValue[], attr: OtlpKeyValue | undefined): void {
@@ -43,6 +50,9 @@ function resolveEventId(source?: () => string): string {
 
 interface RunState {
   eventId: string;
+  /** Identity and caller properties for this run: `withContext` over the subscription's. */
+  userId?: string;
+  callerProperties?: Record<string, unknown>;
   rootSpan?: InternalSpan;
   currentInput: string;
   currentLlmSpan?: InternalSpan;
@@ -174,7 +184,7 @@ export function createSubscriber(
         if (eventShipper) {
           eventShipper
             .finish(currentRun.eventId, {
-              userId: userId ?? "anonymous",
+              userId: currentRun.userId ?? userId ?? "anonymous",
               properties: { sdk_version: libraryVersion, incomplete: true },
             })
             .catch(() => {});
@@ -182,7 +192,13 @@ export function createSubscriber(
         currentRun = undefined;
       }
 
-      const eventId = resolveEventId(eventIdSource);
+      const eventId = callContextEventId() ?? resolveEventId(eventIdSource);
+      // Per-call context (`raindrop.withContext` around `agent.prompt()`):
+      // identity, caller properties and attachments for this run's event.
+      const callContext = currentCallContext();
+      const runUserId = callContext?.userId ?? userId;
+      const runCallerProperties = { ...properties, ...(callContext?.properties ?? {}) };
+      const runAttachments = normalizeAttachments(callContext?.attachments);
       const rootSpan = traceShipper
         ? traceShipper.startSpan({
             name: options.runName ?? eventName ?? "Pi Agent",
@@ -199,6 +215,8 @@ export function createSubscriber(
 
       currentRun = {
         eventId,
+        userId: runUserId,
+        callerProperties: runCallerProperties,
         rootSpan,
         currentInput: "",
         outputParts: [],
@@ -216,9 +234,11 @@ export function createSubscriber(
         eventShipper
           .patch(eventId, {
             isPending: true,
-            userId: userId ?? "anonymous",
+            userId: runUserId ?? "anonymous",
             convoId,
             eventName,
+            callerProperties: runCallerProperties, // caller wins over derived keys (W6)
+            ...(runAttachments ? { attachments: runAttachments } : {}),
             properties: {
               ...properties,
               sdk_version: libraryVersion,
@@ -533,7 +553,7 @@ export function createSubscriber(
       if (eventShipper) {
         eventShipper
           .finish(run.eventId, {
-            userId: userId ?? "anonymous",
+            userId: run.userId ?? "anonymous",
             model: run.lastModel || undefined,
             output: run.error ? undefined : outputText || undefined,
             usage: {
@@ -542,6 +562,7 @@ export function createSubscriber(
                 run.totalOutputTokens > 0 ? run.totalOutputTokens : undefined,
             },
             error: run.error,
+            callerProperties: run.callerProperties ?? properties, // caller wins over derived keys (W6)
             properties: {
               ...properties,
               sdk_version: libraryVersion,

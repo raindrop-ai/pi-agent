@@ -1,13 +1,14 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
 import type { AppGitOptions, PromptToolsOverride } from "@raindrop-ai/core";
 import type { Attachment } from "./internal/shipper";
+import type { EventsApi, FlushResultCompat, RaindropClientOptions } from "@raindrop-ai/core";
 
 export type { Attachment };
 
 /**
  * Options for the Raindrop Pi Agent client.
  */
-export interface RaindropPiAgentOptions {
+export interface RaindropPiAgentOptions extends Omit<RaindropClientOptions, "debug"> {
   /** Application Git identity. Local discovery requires an explicit sourceDirectory; false disables enrichment. */
   appGit?: AppGitOptions | false;
   /**
@@ -119,18 +120,21 @@ export interface RaindropPiAgentClient {
    * @returns Unsubscribe function to stop tracking
    */
   subscribe(agent: Agent, options?: PiAgentSubscribeOptions): () => void;
+  /**
+   * Run `fn` with a per-call event context: `userId`, `convoId`, `eventName`,
+   * `properties` and `attachments` (each with `type` and `role`) apply to
+   * the agent run started inside it (`agent.prompt()`), sync or async. Returns `fn`'s result.
+   */
+  withContext<R>(context: import("@raindrop-ai/core").CallContext, fn: () => R): R;
 
   /** Event management methods */
-  events: {
-    /** Patch an existing event with additional data */
-    patch(eventId: string, data: Record<string, unknown>): Promise<void>;
-    /** Add attachments to an event */
-    addAttachments(eventId: string, attachments: Attachment[]): Promise<void>;
-    /** Set properties on an event */
-    setProperties(eventId: string, properties: Record<string, unknown>): Promise<void>;
-    /** Finish an event (trigger immediate shipping) */
-    finish(eventId: string): Promise<void>;
-  };
+  /**
+   * Event id of the last turn this integration finished, or `undefined`
+   * before the first. Use it to attach a signal or feedback to that turn.
+   * Finishes made through `events.*` don't change it.
+   */
+  readonly lastEventId: string | undefined;
+  events: EventsApi;
 
   /** User identification methods */
   users: {
@@ -155,8 +159,8 @@ export interface RaindropPiAgentClient {
   };
 
   /** Flush all pending events and traces */
-  flush(): Promise<void>;
+  flush(): Promise<FlushResultCompat>;
 
   /** Shutdown the client, flushing all data */
-  shutdown(): Promise<void>;
+  shutdown(): Promise<FlushResultCompat>;
 }

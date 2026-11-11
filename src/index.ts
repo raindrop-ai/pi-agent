@@ -1,5 +1,15 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
-import { createAppGitContext, resolveLocalDebuggerBaseUrl } from "@raindrop-ai/core";
+import {
+  createAppGitContext,
+  resolveLocalDebuggerBaseUrl,
+  createEventsApi,
+  type CallContext,
+  withCallContext,
+  eventShipperOptions,
+  flushShippers,
+  shutdownShippers,
+  traceShipperOptions,
+} from "@raindrop-ai/core";
 import { EventShipper, TraceShipper } from "./internal/shipper";
 import { createSubscriber } from "./internal/subscriber";
 import type {
@@ -70,35 +80,31 @@ export function createRaindropPiAgent(
 
   const eventShipper =
     eventsEnabled && (hasWriteKey || opts.endpoint || hasLocalDestination)
-      ? new EventShipper({
-          writeKey: opts.writeKey,
-          endpoint: opts.endpoint,
-          enabled: true,
-          debug: opts.events?.debug === true || envDebug,
-          partialFlushMs: opts.events?.partialFlushMs,
-          projectId: opts.projectId,
-          localDebuggerUrl: opts.localWorkshopUrl,
-          maxTextFieldChars: opts.maxTextFieldChars,
-          appGitContext,
-        })
+      ? new EventShipper(
+          eventShipperOptions(opts, {
+            enabled: true,
+            debug: opts.events?.debug === true || envDebug,
+            partialFlushMs: opts.events?.partialFlushMs,
+            localDebuggerUrl: opts.localWorkshopUrl,
+            appGitContext,
+          }),
+        )
       : null;
 
   const traceShipper =
     tracesEnabled && (hasWriteKey || opts.endpoint || hasLocalDestination)
-      ? new TraceShipper({
-          writeKey: opts.writeKey,
-          endpoint: opts.endpoint,
-          enabled: true,
-          debug: opts.traces?.debug === true || envDebug,
-          debugSpans: opts.traces?.debugSpans === true || envDebug,
-          flushIntervalMs: opts.traces?.flushIntervalMs,
-          maxBatchSize: opts.traces?.maxBatchSize,
-          maxQueueSize: opts.traces?.maxQueueSize,
-          projectId: opts.projectId,
-          localDebuggerUrl: opts.localWorkshopUrl,
-          maxTextFieldChars: opts.maxTextFieldChars,
-          appGitContext,
-        })
+      ? new TraceShipper(
+          traceShipperOptions(opts, {
+            enabled: true,
+            debug: opts.traces?.debug === true || envDebug,
+            debugSpans: opts.traces?.debugSpans === true || envDebug,
+            flushIntervalMs: opts.traces?.flushIntervalMs,
+            maxBatchSize: opts.traces?.maxBatchSize,
+            maxQueueSize: opts.traces?.maxQueueSize,
+            localDebuggerUrl: opts.localWorkshopUrl,
+            appGitContext,
+          }),
+        )
       : null;
 
   const defaultOptions = {
@@ -123,27 +129,18 @@ export function createRaindropPiAgent(
       );
     },
 
-    events: {
-      async patch(eventId: string, data: Record<string, unknown>) {
-        if (!eventShipper) return;
-        await eventShipper.patch(eventId, data);
-      },
-
-      async addAttachments(eventId: string, attachments: Attachment[]) {
-        if (!eventShipper) return;
-        await eventShipper.patch(eventId, { attachments });
-      },
-
-      async setProperties(eventId: string, properties: Record<string, unknown>) {
-        if (!eventShipper) return;
-        await eventShipper.patch(eventId, { properties });
-      },
-
-      async finish(eventId: string) {
-        if (!eventShipper) return;
-        await eventShipper.finish(eventId, {});
-      },
+    withContext<R>(context: CallContext, fn: () => R): R {
+      return withCallContext(context, fn);
     },
+
+    get lastEventId(): string | undefined {
+
+      return eventShipper?.lastFinishedEventId;
+
+    },
+
+
+    events: createEventsApi(eventShipper),
 
     users: {
       async identify(params: { userId: string; traits?: Record<string, unknown> }) {
@@ -197,18 +194,12 @@ export function createRaindropPiAgent(
     },
 
     async flush() {
-      await Promise.all([
-        eventShipper?.flush() ?? Promise.resolve(),
-        traceShipper?.flush() ?? Promise.resolve(),
-      ]);
+      return flushShippers(eventShipper, traceShipper);
     },
 
     async shutdown() {
       try {
-        await Promise.all([
-          eventShipper?.shutdown() ?? Promise.resolve(),
-          traceShipper?.shutdown() ?? Promise.resolve(),
-        ]);
+        return await shutdownShippers(eventShipper, traceShipper);
       } finally {
         try { appGitContext.dispose(); } catch { /* optional metadata cleanup is best-effort */ }
       }

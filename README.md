@@ -58,6 +58,18 @@ pi install npm:@raindrop-ai/pi-agent
 
 Set `RAINDROP_WRITE_KEY` in your environment. Traces appear automatically.
 
+## Shared client options
+
+`createRaindropPiAgent(...)` also takes the options every Raindrop JS integration shares (the Pi Coding Agent CLI extension reads its settings from config files and env vars, so these apply to the programmatic client only):
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `redactPii` | `boolean` | `false` | Redact PII (emails, phone numbers, card numbers, addresses, secrets) from event input/output before it leaves the process |
+| `redactPiiFields` | `PiiFieldMap` | - | More wire field paths to redact when `redactPii` is on, e.g. `{ event: ["properties.customer.email"] }`; add `properties["error.message"]` to also redact error messages |
+| `flushTimeoutMs` | `number` | `10000` | Deadline for `flush()` / `shutdown()`. Both resolve to a result (`delivered`, `dropped`, `queued`, ...) and never reject |
+
+`flush()` and `shutdown()` resolve to `{ delivered, timedOut, dropped, queued, inFlight }` and never reject; ignoring the result is fine.
+
 ## Projects
 
 If your org has multiple projects, route events to a specific one by passing its slug as `projectId` programmatically:
@@ -111,6 +123,43 @@ The CLI extension retains its existing event and span limits.
 Oversized JSON tool payloads are pruned to fit the configured limit while staying
 valid JSON. A stricter `OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT` can still truncate
 serialized JSON afterward in the shared trace shipper.
+
+## Per-call context
+
+For one call, wrap
+it in `raindrop.withContext(...)`: `userId`, `convoId`, `eventName`,
+`properties` and `attachments` apply to every event captured inside the
+callback, sync or async (nested calls merge; the inner value wins). Your
+properties win over keys the integration sets itself (`ai.usage.*`,
+`error.*`, ...).
+
+```ts
+const result = await raindrop.withContext(
+  {
+    userId: "user-123",
+    properties: { tenant: "acme" },
+    attachments: [{ type: "text", role: "input", name: "policy.txt", value: policyText }],
+  },
+  () => agent.prompt("Summarize the policy"),
+);
+```
+
+Attachments need `type` (`text`, `image` or `iframe`) and `role` (`input` or
+`output`); entries without them are dropped. Images go in as data URIs or URLs.
+
+## Your properties win
+
+Properties you pass (as defaults, per call, or through `events.setProperties` / `events.patch` / `events.finish`) are merged into the event. If one of your keys has the same name as a key the integration sets itself, such as `ai.usage.*`, `ai.provider`, `error.type` / `error.message`, or the integration's own prefixed keys, your value is kept, whatever order the updates are sent in. With `debug` on, the integration logs each key you override.
+
+## Event ids
+
+Pass your own id for a turn with `raindrop.withContext({ eventId }, () => ...)` around the call; the event and every span of the turn carry it. Use a fresh id per turn. After a turn finishes, `raindrop.lastEventId` holds its id, for attaching a signal or feedback:
+
+```ts
+await raindrop.signals.track({ eventId: raindrop.lastEventId!, name: "thumbs_up", type: "feedback", sentiment: "POSITIVE" });
+```
+
+Finishes you make through `raindrop.events.*` don't change `lastEventId`. It holds the last turn finished anywhere in the process, so on a client shared by concurrent turns, use the id you passed instead.
 
 ## Documentation
 

@@ -256,6 +256,8 @@ export function registerTracing(
         input: state.currentInput,
         ...(attachments.length > 0 ? { attachments } : {}),
         properties: getBaseProperties(config, ctx),
+        // Configured event properties are the caller's and win (W6).
+        callerProperties: config.eventMetadata?.properties,
       });
       await eventShipper.flush();
 
