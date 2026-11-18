@@ -1,6 +1,6 @@
 {
   "name": "@raindrop-ai/pi-agent",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Raindrop observability for Pi Agent — automatic tracing via subscriber or pi-coding-agent extension",
   "type": "module",
   "license": "MIT",
@@ -49,6 +49,8 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "test": "vitest run",
+    "test:pi-v0.84": "pnpm build && cd tests/pi-v0.84 && pnpm install --ignore-workspace --lockfile=false && pnpm test",
+    "test:pi-v1.5": "pnpm build && cd tests/pi-v1.5 && pnpm install --ignore-workspace --lockfile=false && pnpm test",
     "test:watch": "vitest"
   },
   "peerDependencies": {
@@ -63,8 +65,8 @@
   "devDependencies": {
     "@earendil-works/pi-agent-core": "^0.84.4",
     "@earendil-works/pi-ai": "^0.84.4",
-    "@earendil-works/pi-coding-agent": "^0.84.4",
-    "@raindrop-ai/core": "0.3.3",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@raindrop-ai/core": "0.3.4",
     "@types/node": "^20.11.17",
     "msw": "^2.12.7",
     "tsup": "^9.0.0",

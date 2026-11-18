@@ -12,6 +12,7 @@ import {
   safeStringify,
   formatToolSpanName,
   serializeModelContext,
+  extractModelTools,
   getUsername,
   getHostname,
   modelSpendSpanAttributes,
@@ -148,7 +149,7 @@ export function createSubscriber(
             // `ai.prompt` bounded-clones the tools into the text budget; the
             // catalog is recorded whole here (a schema cut mid-way is useless).
             promptToolsAttribute(
-              resolvePromptTools({ override: promptToolsOverride, inferred: context.tools }),
+              resolvePromptTools({ override: promptToolsOverride, inferred: extractModelTools(context) }),
             ),
           ],
         });

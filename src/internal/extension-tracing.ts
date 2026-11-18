@@ -24,6 +24,7 @@ import {
 } from "./shipper";
 import {
   capText,
+  capTextBlocks,
   extractAssistantText,
   safeStringify,
   truncate,
@@ -230,7 +231,12 @@ export function registerTracing(
       state.toolCallToLlmParent.clear();
       // Capped so a multi-MB prompt can't produce span attributes / events
       // that the ingest API rejects (silent data loss).
-      state.currentInput = capText(event.prompt);
+      const input = "prompt" in event
+        ? event.prompt
+        : typeof event.message.content === "string"
+          ? event.message.content
+          : capTextBlocks(event.message.content);
+      state.currentInput = capText(input);
       state.turnNumber = 0;
       state.currentSystemPrompt = config.captureSystemPrompt
         ? truncateSystemPrompt(event.systemPrompt)
@@ -241,7 +247,7 @@ export function registerTracing(
       state.totalCacheReadTokens = 0;
 
       const attachments: Attachment[] =
-        event.images?.map((image: { mimeType: string; data: string }, index: number) => ({
+        ("images" in event ? event.images : undefined)?.map((image: { mimeType: string; data: string }, index: number) => ({
           type: "image" as const,
           role: "input" as const,
           name: `image-${index + 1}.${image.mimeType.split("/")[1]?.split("+")[0] ?? "png"}`,

@@ -169,6 +169,21 @@ export function capText(value: string, limit: number = MAX_TEXT_FIELD_CHARS): st
   return value.slice(0, limit);
 }
 
+export function capTextBlocks(blocks: readonly (TextContent | ImageContent)[]): string {
+  const parts: string[] = [];
+  let length = 0;
+  for (const block of blocks) {
+    if (block.type !== "text") continue;
+    const separatorLength = parts.length > 0 ? 1 : 0;
+    const remaining = MAX_TEXT_FIELD_CHARS + 1 - length - separatorLength;
+    const text = block.text.slice(0, Math.max(0, remaining));
+    parts.push(text);
+    length += separatorLength + text.length;
+    if (length > MAX_TEXT_FIELD_CHARS) break;
+  }
+  return capText(parts.join("\n"));
+}
+
 /**
  * Shallow-prune a payload to roughly `budget.remaining` characters of content,
  * so `JSON.stringify` of the clone is O(budget) regardless of payload shape.
@@ -296,8 +311,35 @@ export function getUsername(): string {
   return _username;
 }
 
+export function extractModelTools(context: { tools?: unknown; messages: readonly unknown[] }): unknown {
+  if (context.tools !== undefined) return context.tools;
+  const tools = new Map<string, unknown>();
+  let hasCatalog = false;
+  for (const message of context.messages) {
+    if (typeof message !== "object" || message === null || !("role" in message) || message.role !== "system") continue;
+    if ("toolsRemoved" in message && Array.isArray(message.toolsRemoved)) {
+      hasCatalog = true;
+      const removed: unknown[] = message.toolsRemoved;
+      for (const tool of removed) {
+        if (typeof tool === "object" && tool !== null && "name" in tool && typeof tool.name === "string") tools.delete(tool.name);
+      }
+    }
+    if ("toolsAdded" in message && Array.isArray(message.toolsAdded)) {
+      hasCatalog = true;
+      const added: unknown[] = message.toolsAdded;
+      for (const tool of added) {
+        if (typeof tool === "object" && tool !== null && "name" in tool && typeof tool.name === "string") tools.set(tool.name, tool);
+      }
+    }
+  }
+  return hasCatalog ? [...tools.values()] : undefined;
+}
+
 /** Budget the conversion itself, before allocating message copies or image URLs. */
-export function serializeModelContext(context: Context, limit: number): string {
+export function serializeModelContext(
+  context: Omit<Context, "messages"> & { messages: readonly Parameters<typeof modelMessage>[0][] },
+  limit: number,
+): string {
   // JSON syntax and escaping also use space. Halving the content budget keeps
   // total traversal bounded while leaving a complete document for the shipper.
   for (let contentLimit = limit; contentLimit > 0; contentLimit = Math.floor(contentLimit / 2)) {
@@ -343,7 +385,10 @@ function modelBlock(block: TextContent | ImageContent | ThinkingContent | ToolCa
   }
 }
 
-function modelMessage(message: Message, budget: { remaining: number }) {
+function modelMessage(
+  message: Message | { role: "system"; content: string | TextContent[]; sections?: unknown },
+  budget: { remaining: number },
+) {
   budget.remaining -= 16;
   const toolCallId = message.role === "toolResult" ? takeText(message.toolCallId, budget) : undefined;
   const toolName = message.role === "toolResult" ? takeText(message.toolName, budget) : undefined;
@@ -360,6 +405,10 @@ function modelMessage(message: Message, budget: { remaining: number }) {
   const content = typeof message.content === "string" ? takeText(message.content, budget) : blocks;
   if (message.role === "toolResult") {
     return { role: "tool", toolCallId, toolName, isError: message.isError, content };
+  }
+  if (message.role === "system") {
+    const sections = message.sections === undefined ? undefined : boundedClone(message.sections, budget, 0);
+    return { role: message.role, content, sections };
   }
   return { role: message.role, content };
 }
